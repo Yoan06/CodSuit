@@ -3,7 +3,7 @@ import { Plus, Search, Filter, Edit, Trash2, MapPin, Phone, Mail, Globe, Buildin
 
 interface Entreprise {
   id: number;
-  nom_: string;
+  nom: string;
   raisonSociale: string;
   siret: string;
   email: string;
