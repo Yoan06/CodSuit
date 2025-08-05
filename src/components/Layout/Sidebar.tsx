@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { 
   Package, 
   Users, 
@@ -14,25 +15,22 @@ import {
   DollarSign
 } from 'lucide-react';
 
-interface SidebarProps {
-  activeModule: string;
-  onModuleChange: (module: string) => void;
-}
+const modules = [
+  { id: 'dashboard', name: 'Dashboard', icon: Home, color: 'text-blue-600', path: '/dashboard' },
+  { id: 'approvisionnement', name: 'Approvisionnement', icon: Package, color: 'text-green-600', path: '/approvisionnement' },
+  { id: 'gestion-entreprise', name: 'Gestion d\'Entreprise', icon: Building, color: 'text-indigo-600', path: '/gestion-entreprise' },
+  { id: 'gestion-rh', name: 'Gestion RH', icon: Users, color: 'text-purple-600', path: '/gestion-rh' },
+  { id: 'financier', name: 'Financier', icon: DollarSign, color: 'text-emerald-600', path: '/financier' },
+  { id: 'gestion-livraison', name: 'Gestion de Livraison', icon: Truck, color: 'text-blue-600', path: '/gestion-livraison' },
+  { id: 'relation-client', name: 'Relation Client', icon: MessageCircle, color: 'text-teal-600', path: '/relation-client' },
+  { id: 'marketing', name: 'Marketing', icon: Megaphone, color: 'text-pink-600', path: '/marketing' },
+  { id: 'commandes', name: 'Commandes', icon: ShoppingCart, color: 'text-orange-600', path: '/commandes' },
+  { id: 'stock', name: 'Stocks', icon: Archive, color: 'text-gray-600', path: '/stock' },
+  { id: 'boutiques', name: 'Boutiques', icon: Store, color: 'text-red-600', path: '/boutiques' },
+];
 
-const Sidebar: React.FC<SidebarProps> = ({ activeModule, onModuleChange }) => {
-  const modules = [
-    { id: 'dashboard', name: 'Dashboard', icon: Home, color: 'text-blue-600' },
-    { id: 'approvisionnement', name: 'Approvisionnement', icon: Package, color: 'text-green-600' },
-    { id: 'gestion-entreprise', name: 'Gestion d\'Entreprise', icon: Building, color: 'text-indigo-600' },
-    { id: 'gestion-rh', name: 'Gestion RH', icon: Users, color: 'text-purple-600' },
-    { id: 'financier', name: 'Financier', icon: DollarSign, color: 'text-emerald-600' },
-    { id: 'gestion-livraison', name: 'Gestion de Livraison', icon: Truck, color: 'text-blue-600' },
-    { id: 'relation-client', name: 'Relation Client', icon: MessageCircle, color: 'text-teal-600' },
-    { id: 'marketing', name: 'Marketing', icon: Megaphone, color: 'text-pink-600' },
-    { id: 'commandes', name: 'Commandes', icon: ShoppingCart, color: 'text-orange-600' },
-    { id: 'stock', name: 'Stocks', icon: Archive, color: 'text-gray-600' },
-    { id: 'boutiques', name: 'Boutiques', icon: Store, color: 'text-red-600' },
-  ];
+const Sidebar: React.FC = () => {
+  const location = useLocation();
 
   return (
     <div className="bg-white h-full w-64 shadow-lg border-r border-gray-200 fixed left-0 top-0 z-30">
@@ -52,12 +50,11 @@ const Sidebar: React.FC<SidebarProps> = ({ activeModule, onModuleChange }) => {
         <div className="space-y-1">
           {modules.map((module) => {
             const Icon = module.icon;
-            const isActive = activeModule === module.id;
-            
+            const isActive = location.pathname === module.path;
             return (
-              <button
+              <Link
                 key={module.id}
-                onClick={() => onModuleChange(module.id)}
+                to={module.path}
                 className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all duration-200 hover:bg-gray-50 group ${
                   isActive 
                     ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-700' 
@@ -68,7 +65,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeModule, onModuleChange }) => {
                 <span className={`text-sm font-medium ${isActive ? 'text-blue-700' : 'text-gray-700'}`}>
                   {module.name}
                 </span>
-              </button>
+              </Link>
             );
           })}
         </div>
