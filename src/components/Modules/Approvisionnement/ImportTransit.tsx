@@ -195,7 +195,7 @@ const ImportTransit: React.FC = () => {
                       <MapPin className="w-4 h-4 mr-1 text-red-500" />
                       {commande.lieu_actuel}
                     </p>
-                  </div>
+                  </div> 
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                   <div>
