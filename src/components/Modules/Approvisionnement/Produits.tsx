@@ -1,108 +1,224 @@
-import React, { useState } from 'react';
-import { Plus, Search, Filter, TrendingUp, TrendingDown, Package, Truck, BarChart3, Calendar, Edit } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Plus, Edit, Trash2 } from 'lucide-react';
+import { getProduits, createProduit, updateProduit, deleteProduit } from '../../../services/produitService';
+import { getFournisseurs } from '../../../services/fournisseurService';
+import { getSaisons } from '../../../services/saisonService';
+import { AxiosError } from 'axios';
+
+interface Fournisseur {
+  id: number;
+  nom: string;
+  email: string;
+  telephone?: string;
+  adresse?: string;
+  ville?: string;
+  pays?: string;
+  date_ajout?: string;
+}
 
 interface Produit {
   id: number;
   nom: string;
   categorie: string;
-  fournisseur: string;
+  fournisseur: number;
   prix: number;
-  stockActuel: number;
-  ventesRecentes: number;
-  dateLancement: string;
-  dateMiseAJour: string;
-  statut: 'Actif' | 'Inactif' | 'Fin de vie';
-  performance: {
-    ventesEvolution: number;
-    stockEvolution: number;
-  };
+  stock_actuel: number;
+  description?: string;
+  date_lancement?: string;
+  date_mise_a_jour?: string;
+  statut: 'actif' | 'inactif' | 'fin_de_vie';
+  saisons?: number[];
+}
+
+interface Saison {
+  id: number;
+  nom: string;
 }
 
 const Produits: React.FC = () => {
-  const [showBonLivraisonForm, setShowBonLivraisonForm] = useState<number | null>(null);
   const [showProduitForm, setShowProduitForm] = useState(false);
   const [editingProduit, setEditingProduit] = useState<Produit | null>(null);
-  const [produits] = useState<Produit[]>([
-    {
-      id: 1,
-      nom: 'Smartphone XYZ Pro',
-      categorie: 'Électronique',
-      fournisseur: 'TechnoSupply SARL',
-      prix: 599.99,
-      stockActuel: 45,
-      ventesRecentes: 23,
-      dateLancement: '2024-01-15',
-      dateMiseAJour: '2024-11-01',
-      statut: 'Actif',
-      performance: {
-        ventesEvolution: 15.2,
-        stockEvolution: -8.5
-      }
-    },
-    {
-      id: 2,
-      nom: 'Laptop Business 15"',
-      categorie: 'Informatique',
-      fournisseur: 'GlobalParts Ltd',
-      prix: 899.99,
-      stockActuel: 12,
-      ventesRecentes: 8,
-      dateLancement: '2023-09-10',
-      dateMiseAJour: '2024-10-15',
-      statut: 'Actif',
-      performance: {
-        ventesEvolution: -5.3,
-        stockEvolution: -12.1
-      }
-    }
-  ]);
-
-  const [bonLivraisonData, setBonLivraisonData] = useState({
-    quantite: '',
-    dateLivraison: '',
-    numeroBon: '',
-    livreur: '',
-    statut: 'En transit'
-  });
+  const [produits, setProduits] = useState<Produit[]>([]);
+  const [fournisseurs, setFournisseurs] = useState<Fournisseur[]>([]);
+  const [saisons, setSaisons] = useState<Saison[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
 
   const [produitFormData, setProduitFormData] = useState({
     nom: '',
     categorie: '',
     fournisseur: '',
     prix: '',
-    stockActuel: '',
-    description: ''
+    stock_actuel: '',
+    description: '',
+    date_lancement: '',
+    statut: 'actif' as 'actif' | 'inactif' | 'fin_de_vie',
+    saisons: [] as number[]
   });
   
-  const fournisseurs = ['TechnoSupply SARL', 'GlobalParts Ltd', 'LocalDistrib'];
   const categories = ['Électronique', 'Informatique', 'Accessoires', 'Mobilier', 'Fournitures'];
 
-  const handleBonLivraisonSubmit = (e: React.FormEvent, produitId: number) => {
-    e.preventDefault();
-    console.log('Bon de livraison créé pour le produit', produitId, bonLivraisonData);
-    setBonLivraisonData({
-      quantite: '',
-      dateLivraison: '',
-      numeroBon: '',
-      livreur: '',
-      statut: 'En transit'
-    });
-    setShowBonLivraisonForm(null);
+  // Helper function pour vérifier si une erreur est une AxiosError
+  const isAxiosError = (err: unknown): err is AxiosError => {
+    return (err as AxiosError).isAxiosError === true;
   };
 
-  const handleProduitSubmit = (e: React.FormEvent) => {
+  // Récupérer le token depuis le localStorage ou une autre source
+  useEffect(() => {
+    const authenticate = async () => {
+      console.log('🔐 Tentative d\'authentification...');
+      try {
+        const response = await fetch('http://localhost:8000/api/token/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            username: 'yoan',
+            password: 'test12345'
+          })
+        });
+        
+        console.log('📡 Réponse du serveur:', response.status, response.statusText);
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('✅ Authentification réussie:', data);
+          setToken(data.access);
+          localStorage.setItem('authToken', data.access);
+        } else {
+          const errorData = await response.text();
+          console.error('❌ Erreur d\'authentification:', errorData);
+          setError(`Impossible de s'authentifier: ${response.status} ${response.statusText}`);
+        }
+      } catch (err) {
+        console.error("❌ Erreur d'authentification:", err);
+        setError("Erreur de connexion au serveur. Vérifiez que le backend Django est démarré.");
+      }
+    };
+
+    // Essayer d'abord de récupérer le token stocké
+    const storedToken = localStorage.getItem('authToken');
+    if (storedToken) {
+      console.log('🔑 Token trouvé dans le localStorage');
+      setToken(storedToken);
+    } else {
+      console.log('🔑 Aucun token trouvé, authentification nécessaire');
+      authenticate();
+    }
+  }, []);
+
+  const fetchProduits = useCallback(async () => {
+    if (!token) {
+      console.log('🚫 Pas de token disponible pour récupérer les produits');
+      return;
+    }
+    console.log('📡 Récupération des produits avec le token:', token.substring(0, 20) + '...');
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await getProduits(token);
+      console.log('✅ Produits récupérés:', res.data);
+      setProduits(res.data);
+    } catch (err: unknown) {
+      if (isAxiosError(err)) {
+        console.error("❌ Erreur lors du chargement des produits :", err);
+        console.error("Status:", err.response?.status);
+        console.error("Status Text:", err.response?.statusText);
+        console.error("Détails de l'erreur:", err.response?.data || err.message);
+        
+        if (err.response?.status === 401) {
+          console.log('🔑 Token expiré ou invalide, suppression du token...');
+          localStorage.removeItem('authToken');
+          setToken(null);
+          setError("Session expirée. Veuillez recharger la page pour vous reconnecter.");
+        } else {
+          setError(`Erreur lors du chargement des produits: ${err.response?.status} ${err.response?.statusText}`);
+        }
+      } else {
+        console.error("❌ Erreur lors du chargement des produits inattendue :", err);
+        setError("Une erreur inattendue s'est produite lors du chargement des produits.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  const fetchFournisseurs = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await getFournisseurs(token);
+      setFournisseurs(res.data);
+    } catch (err) {
+      console.error("Erreur lors du chargement des fournisseurs:", err);
+    }
+  }, [token]);
+
+  const fetchSaisons = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await getSaisons(token);
+      setSaisons(res.data);
+    } catch (err) {
+      console.error('Erreur lors du chargement des saisons:', err);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (token) {
+      fetchProduits();
+      fetchFournisseurs();
+      fetchSaisons();
+    }
+  }, [token, fetchProduits, fetchFournisseurs, fetchSaisons]);
+
+  const handleProduitSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Produit ajouté/modifié:', produitFormData);
+    if (!token) {
+      setError("Pas de token d'authentification.");
+      return;
+    }
+
+    try {
+      const dataToSend = {
+        ...produitFormData,
+        prix: parseFloat(produitFormData.prix),
+        stock_actuel: parseInt(produitFormData.stock_actuel),
+        fournisseur: parseInt(produitFormData.fournisseur),
+        date_lancement: produitFormData.date_lancement || null,
+        saisons: produitFormData.saisons
+      };
+
+      if (editingProduit) {
+        await updateProduit(editingProduit.id, dataToSend, token);
+      } else {
+        await createProduit(dataToSend, token);
+      }
+      
+      fetchProduits();
+      setShowProduitForm(false);
+      setEditingProduit(null);
     setProduitFormData({
       nom: '',
       categorie: '',
       fournisseur: '',
       prix: '',
-      stockActuel: '',
-      description: ''
-    });
-    setShowProduitForm(false);
-    setEditingProduit(null);
+        stock_actuel: '',
+        description: '',
+        date_lancement: '',
+        statut: 'actif',
+        saisons: []
+      });
+    } catch (err: unknown) {
+      if (isAxiosError(err)) {
+        console.error("Erreur lors de l'opération sur le produit :", err);
+        setError("Erreur lors de l'enregistrement du produit. Veuillez réessayer.");
+      } else {
+        console.error("Erreur lors de l'opération sur le produit inattendue :", err);
+        setError("Une erreur inattendue s'est produite lors de l'enregistrement du produit.");
+      }
+    }
   };
 
   const handleEditProduit = (produit: Produit) => {
@@ -110,24 +226,76 @@ const Produits: React.FC = () => {
     setProduitFormData({
       nom: produit.nom,
       categorie: produit.categorie,
-      fournisseur: produit.fournisseur,
+      fournisseur: produit.fournisseur.toString(),
       prix: produit.prix.toString(),
-      stockActuel: produit.stockActuel.toString(),
-      description: ''
+      stock_actuel: produit.stock_actuel.toString(),
+      description: produit.description || '',
+      date_lancement: produit.date_lancement || '',
+      statut: produit.statut,
+      saisons: produit.saisons || []
     });
     setShowProduitForm(true);
   };
 
+  const handleDeleteProduit = async (id: number) => {
+    if (!token) {
+      setError("Pas de token d'authentification.");
+      return;
+    }
+    if (confirm('Êtes-vous sûr de vouloir supprimer ce produit ?')) {
+      try {
+        await deleteProduit(id, token);
+        fetchProduits();
+      } catch (err: unknown) {
+        if (isAxiosError(err)) {
+          console.error("Erreur lors de la suppression du produit :", err);
+          setError("Erreur lors de la suppression du produit. Veuillez réessayer.");
+        } else {
+          console.error("Erreur lors de la suppression du produit inattendue :", err);
+          setError("Une erreur inattendue s'est produite lors de la suppression du produit.");
+        }
+      }
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    setProduitFormData({
+      ...produitFormData,
+      [e.target.name]: e.target.value
+    });
+  };
+
+  const handleSaisonChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selected = Array.from(e.target.selectedOptions).map((opt) => parseInt(opt.value));
+    setProduitFormData({
+      ...produitFormData,
+      saisons: selected
+    });
+  };
+
   const getStatutColor = (statut: string) => {
     switch (statut) {
-      case 'Actif':
+      case 'actif':
         return 'bg-green-100 text-green-800';
-      case 'Inactif':
+      case 'inactif':
         return 'bg-gray-100 text-gray-800';
-      case 'Fin de vie':
+      case 'fin_de_vie':
         return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getStatutLabel = (statut: string) => {
+    switch (statut) {
+      case 'actif':
+        return 'Actif';
+      case 'inactif':
+        return 'Inactif';
+      case 'fin_de_vie':
+        return 'Fin de vie';
+      default:
+        return statut;
     }
   };
 
@@ -138,20 +306,26 @@ const Produits: React.FC = () => {
     }).format(amount);
   };
 
+  if (loading) return <div className="text-center text-gray-600">Chargement des produits...</div>;
+  if (error) return <div className="text-center text-red-600">Erreur: {error}</div>;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Gestion des Produits</h2>
-          <p className="text-gray-600">Gérez votre catalogue et suivez les performances</p>
+          <p className="text-gray-600">Gérez votre catalogue de produits et leur stock</p>
         </div>
-        <button className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+        <button 
+          onClick={() => setShowProduitForm(true)}
+          className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+        >
           <Plus className="w-4 h-4" />
           <span>Nouveau produit</span>
         </button>
       </div>
 
-      {/* Formulaire d'ajout/modification de produit */}
+      {/* Formulaire d'ajout/modification */}
       {showProduitForm && (
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
@@ -159,20 +333,22 @@ const Produits: React.FC = () => {
           </h3>
           <form onSubmit={handleProduitSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nom du produit *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nom du produit</label>
               <input
                 type="text"
+                name="nom"
                 value={produitFormData.nom}
-                onChange={(e) => setProduitFormData({...produitFormData, nom: e.target.value})}
+                onChange={handleInputChange}
                 required
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Catégorie *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Catégorie</label>
               <select
+                name="categorie"
                 value={produitFormData.categorie}
-                onChange={(e) => setProduitFormData({...produitFormData, categorie: e.target.value})}
+                onChange={handleInputChange}
                 required
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
@@ -183,44 +359,90 @@ const Produits: React.FC = () => {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Fournisseur *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Fournisseur</label>
               <select
+                name="fournisseur"
                 value={produitFormData.fournisseur}
-                onChange={(e) => setProduitFormData({...produitFormData, fournisseur: e.target.value})}
+                onChange={handleInputChange}
                 required
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="">Sélectionner un fournisseur</option>
                 {fournisseurs.map((fournisseur) => (
-                  <option key={fournisseur} value={fournisseur}>{fournisseur}</option>
+                  <option key={fournisseur.id} value={fournisseur.id}>
+                    {fournisseur.nom}
+                  </option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Prix (€) *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Prix (€)</label>
               <input
                 type="number"
                 step="0.01"
+                name="prix"
                 value={produitFormData.prix}
-                onChange={(e) => setProduitFormData({...produitFormData, prix: e.target.value})}
+                onChange={handleInputChange}
                 required
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Stock initial</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Stock actuel</label>
               <input
                 type="number"
-                value={produitFormData.stockActuel}
-                onChange={(e) => setProduitFormData({...produitFormData, stockActuel: e.target.value})}
+                name="stock_actuel"
+                value={produitFormData.stock_actuel}
+                onChange={handleInputChange}
+                required
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
+              <select
+                name="statut"
+                value={produitFormData.statut}
+                onChange={handleInputChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="actif">Actif</option>
+                <option value="inactif">Inactif</option>
+                <option value="fin_de_vie">Fin de vie</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Date de lancement</label>
+              <input
+                type="date"
+                name="date_lancement"
+                value={produitFormData.date_lancement}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Saisons</label>
+              <select
+                multiple
+                name="saisons"
+                value={produitFormData.saisons.map(String)}
+                onChange={handleSaisonChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                {saisons.map((saison) => (
+                  <option key={saison.id} value={saison.id}>{saison.nom}</option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">Astuce: utilisez Ctrl/Cmd pour sélectionner plusieurs saisons</p>
             </div>
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
               <textarea
+                name="description"
                 value={produitFormData.description}
-                onChange={(e) => setProduitFormData({...produitFormData, description: e.target.value})}
+                onChange={handleInputChange}
                 rows={3}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
@@ -242,8 +464,11 @@ const Produits: React.FC = () => {
                     categorie: '',
                     fournisseur: '',
                     prix: '',
-                    stockActuel: '',
-                    description: ''
+                    stock_actuel: '',
+                    description: '',
+                    date_lancement: '',
+                    statut: 'actif',
+                    saisons: []
                   });
                 }}
                 className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors"
@@ -255,200 +480,106 @@ const Produits: React.FC = () => {
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-          <input
-            type="text"
-            placeholder="Rechercher un produit..."
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
+      {/* Tableau des produits */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900">Liste des produits</h3>
         </div>
-        <button className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-          <Filter className="w-4 h-4" />
-          <span>Filtrer</span>
-        </button>
-      </div>
-
-      <div className="grid gap-6">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Produit
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Fournisseur
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Catégorie
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Prix
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Stock
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Statut
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Saisons
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
         {produits.map((produit) => (
-          <div key={produit.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-              {/* Informations principales */}
-              <div className="flex-1">
-                <div className="flex items-center space-x-3 mb-3">
-                  <h3 className="text-xl font-semibold text-gray-900">{produit.nom}</h3>
-                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatutColor(produit.statut)}`}>
-                    {produit.statut}
-                  </span>
-                </div>
-                
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                  <div>
-                    <p className="text-sm text-gray-500">Catégorie</p>
-                    <p className="font-medium text-gray-900">{produit.categorie}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Fournisseur</p>
-                    <p className="font-medium text-gray-900">{produit.fournisseur}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Prix</p>
-                    <p className="font-medium text-gray-900">{formatCurrency(produit.prix)}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Stock actuel</p>
-                    <p className="font-medium text-gray-900">{produit.stockActuel} unités</p>
-                  </div>
-                </div>
-
-                {/* Indicateurs de performance */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                  <div className="bg-blue-50 p-3 rounded-lg">
-                    <div className="flex items-center space-x-2">
-                      <BarChart3 className="w-4 h-4 text-blue-600" />
-                      <span className="text-sm font-medium text-blue-900">Ventes récentes</span>
+                <tr key={produit.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">{produit.nom}</div>
+                    {produit.description && (
+                      <div className="text-sm text-gray-500">{produit.description}</div>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      {fournisseurs.find(f => f.id === produit.fournisseur)?.nom || 'Fournisseur inconnu'}
                     </div>
-                    <div className="flex items-center space-x-2 mt-1">
-                      <span className="text-lg font-bold text-blue-900">{produit.ventesRecentes}</span>
-                      <div className="flex items-center space-x-1">
-                        {produit.performance.ventesEvolution > 0 ? (
-                          <TrendingUp className="w-3 h-3 text-green-500" />
-                        ) : (
-                          <TrendingDown className="w-3 h-3 text-red-500" />
-                        )}
-                        <span className={`text-xs ${produit.performance.ventesEvolution > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                          {Math.abs(produit.performance.ventesEvolution)}%
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                      {produit.categorie}
                         </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-green-50 p-3 rounded-lg">
-                    <div className="flex items-center space-x-2">
-                      <Package className="w-4 h-4 text-green-600" />
-                      <span className="text-sm font-medium text-green-900">Évolution stock</span>
-                    </div>
-                    <div className="flex items-center space-x-2 mt-1">
-                      <span className="text-lg font-bold text-green-900">{produit.stockActuel}</span>
-                      <div className="flex items-center space-x-1">
-                        {produit.performance.stockEvolution > 0 ? (
-                          <TrendingUp className="w-3 h-3 text-green-500" />
-                        ) : (
-                          <TrendingDown className="w-3 h-3 text-red-500" />
-                        )}
-                        <span className={`text-xs ${produit.performance.stockEvolution > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                          {Math.abs(produit.performance.stockEvolution)}%
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">{formatCurrency(produit.prix)}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{produit.stock_actuel}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatutColor(produit.statut)}`}>
+                      {getStatutLabel(produit.statut)}
                         </span>
-                      </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex flex-wrap gap-1">
+                      {produit.saisons && produit.saisons.length > 0 ? (
+                        produit.saisons.map((sid) => {
+                          const s = saisons.find(x => x.id === sid);
+                          return s ? (
+                            <span key={sid} className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 text-purple-800">
+                              {s.nom}
+                            </span>
+                          ) : null;
+                        })
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
                     </div>
-                  </div>
-
-                  <div className="bg-purple-50 p-3 rounded-lg">
-                    <div className="flex items-center space-x-2">
-                      <Calendar className="w-4 h-4 text-purple-600" />
-                      <span className="text-sm font-medium text-purple-900">Cycle de vie</span>
-                    </div>
-                    <div className="mt-1">
-                      <p className="text-xs text-purple-700">Lancé: {new Date(produit.dateLancement).toLocaleDateString('fr-FR')}</p>
-                      <p className="text-xs text-purple-700">MAJ: {new Date(produit.dateMiseAJour).toLocaleDateString('fr-FR')}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex flex-col space-y-2">
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                 <button 
-                  onClick={() => setShowBonLivraisonForm(produit.id)}
-                  className="flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
-                >
-                  <Truck className="w-4 h-4" />
-                  <span>Ajouter bon de livraison</span>
-                </button>
-                <button className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-                  <Edit className="w-4 h-4" />
-                  <span>Modifier produit</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Formulaire bon de livraison */}
-            {showBonLivraisonForm === produit.id && (
-              <div className="mt-6 p-4 bg-gray-50 rounded-lg border">
-                <h4 className="text-lg font-semibold text-gray-900 mb-4">Créer un bon de livraison pour {produit.nom}</h4>
-                <form onSubmit={(e) => handleBonLivraisonSubmit(e, produit.id)} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Quantité livrée</label>
-                    <input
-                      type="number"
-                      value={bonLivraisonData.quantite}
-                      onChange={(e) => setBonLivraisonData({...bonLivraisonData, quantite: e.target.value})}
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Date de livraison</label>
-                    <input
-                      type="date"
-                      value={bonLivraisonData.dateLivraison}
-                      onChange={(e) => setBonLivraisonData({...bonLivraisonData, dateLivraison: e.target.value})}
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Numéro de bon</label>
-                    <input
-                      type="text"
-                      value={bonLivraisonData.numeroBon}
-                      onChange={(e) => setBonLivraisonData({...bonLivraisonData, numeroBon: e.target.value})}
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Livreur/Transporteur</label>
-                    <input
-                      type="text"
-                      value={bonLivraisonData.livreur}
-                      onChange={(e) => setBonLivraisonData({...bonLivraisonData, livreur: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
-                    <select
-                      value={bonLivraisonData.statut}
-                      onChange={(e) => setBonLivraisonData({...bonLivraisonData, statut: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      onClick={() => handleEditProduit(produit)}
+                      className="text-blue-600 hover:text-blue-900 mr-3"
                     >
-                      <option value="En transit">En transit</option>
-                      <option value="Livré">Livré</option>
-                      <option value="En attente">En attente</option>
-                    </select>
-                  </div>
-                  <div className="md:col-span-2 flex space-x-3">
-                    <button
-                      type="submit"
-                      className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
-                    >
-                      Créer le bon
+                      <Edit className="w-4 h-4" />
                     </button>
                     <button
-                      type="button"
-                      onClick={() => setShowBonLivraisonForm(null)}
-                      className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors"
+                      onClick={() => handleDeleteProduit(produit.id)}
+                      className="text-red-600 hover:text-red-900"
                     >
-                      Annuler
+                      <Trash2 className="w-4 h-4" />
                     </button>
-                  </div>
-                </form>
-              </div>
-            )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
           </div>
-        ))}
       </div>
     </div>
   );

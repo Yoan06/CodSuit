@@ -1,88 +1,123 @@
-import React, { useState } from 'react';
-import { Plus, Search, Filter, Edit, Trash2, Star } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Plus, Search, Filter, Edit, Trash2 } from 'lucide-react';
+import { getFournisseurs, createFournisseur, updateFournisseur, deleteFournisseur, login } from '../../../services/fournisseurService';
+import { AxiosError } from 'axios';
 
 interface Fournisseur {
   id: number;
   nom: string;
   email: string;
-  telephone: string;
-  adresse: string;
-  categorie: string;
-  status: 'Actif' | 'Inactif';
-  performance: number;
-  delaiMoyen: string;
+  telephone?: string; // Optionnel
+  adresse?: string; // Optionnel
+  ville?: string; // Optionnel
+  pays?: string; // Optionnel
+  date_ajout?: string; // Géré par le backend
 }
 
 const GestionFournisseurs: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingFournisseur, setEditingFournisseur] = useState<Fournisseur | null>(null);
-  const [fournisseurs, setFournisseurs] = useState<Fournisseur[]>([
-    {
-      id: 1,
-      nom: 'TechnoSupply SARL',
-      email: 'contact@technosupply.com',
-      telephone: '+33 1 23 45 67 89',
-      adresse: '123 Rue de la Tech, 75001 Paris',
-      categorie: 'Matériel informatique',
-      status: 'Actif',
-      performance: 4.5,
-      delaiMoyen: '5 jours'
-    },
-    {
-      id: 2,
-      nom: 'GlobalParts Ltd',
-      email: 'orders@globalparts.com',
-      telephone: '+33 1 98 76 54 32',
-      adresse: '456 Avenue des Pièces, 69000 Lyon',
-      categorie: 'Pièces détachées',
-      status: 'Actif',
-      performance: 4.2,
-      delaiMoyen: '7 jours'
-    }
-  ]);
-
+  const [fournisseurs, setFournisseurs] = useState<Fournisseur[]>([]);
   const [formData, setFormData] = useState({
     nom: '',
     email: '',
     telephone: '',
     adresse: '',
-    categorie: ''
+    ville: '',
+    pays: '',
   });
+  const [token, setToken] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const categories = [
-    'Matériel informatique',
-    'Pièces détachées',
-    'Matériel de bureau',
-    'Services informatiques',
-    'Fournitures industrielles',
-    'Équipements électroniques'
-  ];
+  // Helper function pour vérifier si une erreur est une AxiosError
+  const isAxiosError = (err: unknown): err is AxiosError => {
+    return (err as AxiosError).isAxiosError === true;
+  };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (editingFournisseur) {
-      // Modification
-      setFournisseurs(fournisseurs.map(f => 
-        f.id === editingFournisseur.id 
-          ? { ...editingFournisseur, ...formData }
-          : f
-      ));
-      setEditingFournisseur(null);
-    } else {
-      // Ajout
-      const newFournisseur: Fournisseur = {
-        id: fournisseurs.length + 1,
-        ...formData,
-        status: 'Actif',
-        performance: 0,
-        delaiMoyen: 'N/A'
-      };
-      setFournisseurs([...fournisseurs, newFournisseur]);
+  // Gérer l'authentification (pour le test, à remplacer par un contexte d'auth global)
+  useEffect(() => {
+    const authenticate = async () => {
+      console.log('🔐 Tentative d\'authentification...');
+      try {
+        // Utilise des identifiants de test ou récupère-les de façon sécurisée
+        console.log('📡 Envoi de la requête d\'authentification...');
+        const res = await login('yoan', 'test12345'); // Utilisateur 'yoan' avec mot de passe 'test12345'
+        console.log('✅ Authentification réussie:', res.data);
+        setToken(res.data.access);
+      } catch (err: unknown) {
+        if (isAxiosError(err)) {
+          console.error("❌ Erreur d'authentification :", err);
+          console.error("Détails de l'erreur:", err.response?.data || err.message);
+          setError("Impossible de s'authentifier. Vérifiez le backend et les identifiants.");
+        } else {
+          console.error("❌ Erreur d'authentification inattendue :", err);
+          setError("Une erreur inattendue s'est produite lors de l'authentification.");
+        }
+      }
+    };
+    authenticate();
+  }, []);
+
+  const fetchFournisseurs = useCallback(async () => {
+    if (!token) {
+      console.log('🚫 Pas de token disponible pour récupérer les fournisseurs');
+      return;
     }
-    
-    setFormData({ nom: '', email: '', telephone: '', adresse: '', categorie: '' });
-    setShowForm(false);
+    console.log('📡 Récupération des fournisseurs avec le token:', token.substring(0, 20) + '...');
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await getFournisseurs(token);
+      console.log('✅ Fournisseurs récupérés:', res.data);
+      setFournisseurs(res.data);
+    } catch (err: unknown) {
+      if (isAxiosError(err)) {
+        console.error("❌ Erreur lors du chargement des fournisseurs :", err);
+        console.error("Détails de l'erreur:", err.response?.data || err.message);
+        setError("Erreur lors du chargement des fournisseurs. Veuillez réessayer.");
+      } else {
+        console.error("❌ Erreur lors du chargement des fournisseurs inattendue :", err);
+        setError("Une erreur inattendue s'est produite lors du chargement des fournisseurs.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [token]); // token est une dépendance de fetchFournisseurs
+
+  useEffect(() => {
+    if (token) {
+      fetchFournisseurs();
+    }
+  }, [token, fetchFournisseurs]); // Ajout de fetchFournisseurs ici
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) {
+      setError("Pas de token d'authentification.");
+      return;
+    }
+
+    try {
+      if (editingFournisseur) {
+        await updateFournisseur(editingFournisseur.id, formData, token);
+      } else {
+        await createFournisseur(formData, token);
+      }
+      // Recharger la liste après succès
+      fetchFournisseurs();
+      setShowForm(false);
+      setEditingFournisseur(null);
+      setFormData({ nom: '', email: '', telephone: '', adresse: '', ville: '', pays: '' });
+    } catch (err: unknown) {
+      if (isAxiosError(err)) {
+        console.error("Erreur lors de l'opération sur le fournisseur :", err);
+        setError("Erreur lors de l'enregistrement du fournisseur. Veuillez réessayer.");
+      } else {
+        console.error("Erreur lors de l'opération sur le fournisseur inattendue :", err);
+        setError("Une erreur inattendue s'est produite lors de l'enregistrement du fournisseur.");
+      }
+    }
   };
 
   const handleEdit = (fournisseur: Fournisseur) => {
@@ -90,16 +125,32 @@ const GestionFournisseurs: React.FC = () => {
     setFormData({
       nom: fournisseur.nom,
       email: fournisseur.email,
-      telephone: fournisseur.telephone,
-      adresse: fournisseur.adresse,
-      categorie: fournisseur.categorie
+      telephone: fournisseur.telephone || '',
+      adresse: fournisseur.adresse || '',
+      ville: fournisseur.ville || '',
+      pays: fournisseur.pays || '',
     });
     setShowForm(true);
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
+    if (!token) {
+      setError("Pas de token d'authentification.");
+      return;
+    }
     if (confirm('Êtes-vous sûr de vouloir supprimer ce fournisseur ?')) {
-      setFournisseurs(fournisseurs.filter(f => f.id !== id));
+      try {
+        await deleteFournisseur(id, token);
+        fetchFournisseurs(); // Recharger la liste après suppression
+      } catch (err: unknown) {
+        if (isAxiosError(err)) {
+          console.error("Erreur lors de la suppression du fournisseur :", err);
+          setError("Erreur lors de la suppression du fournisseur. Veuillez réessayer.");
+        } else {
+          console.error("Erreur lors de la suppression du fournisseur inattendue :", err);
+          setError("Une erreur inattendue s'est produite lors de la suppression du fournisseur.");
+        }
+      }
     }
   };
 
@@ -109,6 +160,9 @@ const GestionFournisseurs: React.FC = () => {
       [e.target.name]: e.target.value
     });
   };
+
+  if (loading) return <div className="text-center text-gray-600">Chargement des fournisseurs...</div>;
+  if (error) return <div className="text-center text-red-600">Erreur: {error}</div>;
 
   return (
     <div className="space-y-6">
@@ -162,36 +216,40 @@ const GestionFournisseurs: React.FC = () => {
                 name="telephone"
                 value={formData.telephone}
                 onChange={handleInputChange}
-                required
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Catégorie</label>
-              <select
-                name="categorie"
-                value={formData.categorie}
-                onChange={handleInputChange}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Sélectionner une catégorie</option>
-                {categories.map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
-            </div>
-            <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Adresse</label>
               <input
                 type="text"
                 name="adresse"
                 value={formData.adresse}
                 onChange={handleInputChange}
-                required
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Ville</label>
+              <input
+                type="text"
+                name="ville"
+                value={formData.ville}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Pays</label>
+              <input
+                type="text"
+                name="pays"
+                value={formData.pays}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
             <div className="md:col-span-2 flex space-x-3">
               <button
                 type="submit"
@@ -204,7 +262,7 @@ const GestionFournisseurs: React.FC = () => {
                 onClick={() => {
                   setShowForm(false);
                   setEditingFournisseur(null);
-                  setFormData({ nom: '', email: '', telephone: '', adresse: '', categorie: '' });
+                  setFormData({ nom: '', email: '', telephone: '', adresse: '', ville: '', pays: '' });
                 }}
                 className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors"
               >
@@ -242,16 +300,10 @@ const GestionFournisseurs: React.FC = () => {
                   Contact
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Catégorie
+                  Localisation
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Performance
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Délai moyen
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Statut
+                  Date d'ajout
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
@@ -272,38 +324,10 @@ const GestionFournisseurs: React.FC = () => {
                     <div className="text-sm text-gray-500">{fournisseur.telephone}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                      {fournisseur.categorie}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="text-sm font-medium text-gray-900">{fournisseur.performance}/5</div>
-                      <div className="ml-2 flex space-x-1">
-                        {[...Array(5)].map((_, i) => (
-                          <Star
-                            key={i}
-                            className={`w-3 h-3 ${
-                              i < Math.floor(fournisseur.performance) 
-                                ? 'text-yellow-400 fill-current' 
-                                : 'text-gray-300'
-                            }`}
-                          />
-                        ))}
-                      </div>
-                    </div>
+                    <div className="text-sm text-gray-900">{fournisseur.ville}, {fournisseur.pays}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {fournisseur.delaiMoyen}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      fournisseur.status === 'Actif' 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {fournisseur.status}
-                    </span>
+                    {fournisseur.date_ajout ? new Date(fournisseur.date_ajout).toLocaleDateString() : 'N/A'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button 

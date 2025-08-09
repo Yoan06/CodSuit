@@ -1,63 +1,238 @@
-import React, { useState } from 'react';
-import { Calendar, AlertTriangle, CheckCircle, Clock, DollarSign } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { AlertTriangle, CheckCircle, Clock, Plus, Edit, Trash2 } from 'lucide-react';
+import { getEcheances, createEcheance, updateEcheance, deleteEcheance } from '../../../services/echeanceService';
+import { getFournisseurs } from '../../../services/fournisseurService';
+import { AxiosError } from 'axios';
+
+interface Fournisseur {
+  id: number;
+  nom: string;
+  email: string;
+  telephone?: string;
+  adresse?: string;
+  ville?: string;
+  pays?: string;
+  date_ajout?: string;
+}
 
 interface Echeance {
   id: number;
-  fournisseur: string;
-  datePrevuePaiement: string;
-  datePaiementEffectif?: string;
-  dateDebutCommande: string;
-  dateFinCommande: string;
-  montant: number;
-  statut: 'En attente' | 'Payé' | 'En retard';
-  produit: string;
+  titre: string;
+  description?: string;
+  date_echeance: string;
+  montant?: number;
+  statut: 'en_attente' | 'paye' | 'retard' | 'annule';
+  fournisseur?: number;
+  date_ajout?: string;
 }
 
 const Echeances: React.FC = () => {
-  const [echeances] = useState<Echeance[]>([
-    {
-      id: 1,
-      fournisseur: 'TechnoSupply SARL',
-      datePrevuePaiement: '2024-02-15',
-      datePaiementEffectif: '2024-02-14',
-      dateDebutCommande: '2024-01-15',
-      dateFinCommande: '2024-01-30',
-      montant: 22500,
-      statut: 'Payé',
-      produit: 'Smartphone XYZ Pro'
-    },
-    {
-      id: 2,
-      fournisseur: 'GlobalParts Ltd',
-      datePrevuePaiement: '2024-02-20',
-      dateDebutCommande: '2024-01-20',
-      dateFinCommande: '2024-02-05',
-      montant: 18750,
-      statut: 'En attente',
-      produit: 'Laptop Business 15"'
-    },
-    {
-      id: 3,
-      fournisseur: 'LocalDistrib',
-      datePrevuePaiement: '2024-02-10',
-      dateDebutCommande: '2024-01-10',
-      dateFinCommande: '2024-01-25',
-      montant: 5600,
-      statut: 'En retard',
-      produit: 'Accessoires divers'
-    }
-  ]);
+  const [echeances, setEcheances] = useState<Echeance[]>([]);
+  const [fournisseurs, setFournisseurs] = useState<Fournisseur[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [editingEcheance, setEditingEcheance] = useState<Echeance | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
 
-  const [activeCalendar, setActiveCalendar] = useState<'commandes' | 'paiements' | 'livraisons'>('paiements');
+  const [formData, setFormData] = useState({
+    titre: '',
+    description: '',
+    date_echeance: '',
+    montant: '',
+    statut: 'en_attente' as 'en_attente' | 'paye' | 'retard' | 'annule',
+    fournisseur: ''
+  });
+
+  // Helper function pour vérifier si une erreur est une AxiosError
+  const isAxiosError = (err: unknown): err is AxiosError => {
+    return (err as AxiosError).isAxiosError === true;
+  };
+
+  // Récupérer le token depuis le localStorage ou une autre source
+  useEffect(() => {
+    const authenticate = async () => {
+      console.log('🔐 Tentative d\'authentification...');
+      try {
+        const response = await fetch('http://localhost:8000/api/token/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            username: 'yoan',
+            password: 'test12345'
+          })
+        });
+        
+        console.log('📡 Réponse du serveur:', response.status, response.statusText);
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('✅ Authentification réussie:', data);
+          setToken(data.access);
+          localStorage.setItem('authToken', data.access);
+        } else {
+          const errorData = await response.text();
+          console.error('❌ Erreur d\'authentification:', errorData);
+          setError(`Impossible de s'authentifier: ${response.status} ${response.statusText}`);
+        }
+      } catch (err) {
+        console.error("❌ Erreur d'authentification:", err);
+        setError("Erreur de connexion au serveur. Vérifiez que le backend Django est démarré.");
+      }
+    };
+
+    // Essayer d'abord de récupérer le token stocké
+    const storedToken = localStorage.getItem('authToken');
+    if (storedToken) {
+      console.log('🔑 Token trouvé dans le localStorage');
+      setToken(storedToken);
+    } else {
+      console.log('🔑 Aucun token trouvé, authentification nécessaire');
+      authenticate();
+    }
+  }, []);
+
+  const fetchEcheances = useCallback(async () => {
+    if (!token) {
+      console.log('🚫 Pas de token disponible pour récupérer les échéances');
+      return;
+    }
+    console.log('📡 Récupération des échéances avec le token:', token.substring(0, 20) + '...');
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await getEcheances(token);
+      console.log('✅ Échéances récupérées:', res.data);
+      setEcheances(res.data);
+    } catch (err: unknown) {
+      if (isAxiosError(err)) {
+        console.error("❌ Erreur lors du chargement des échéances :", err);
+        console.error("Status:", err.response?.status);
+        console.error("Status Text:", err.response?.statusText);
+        console.error("Détails de l'erreur:", err.response?.data || err.message);
+        
+        if (err.response?.status === 401) {
+          console.log('🔑 Token expiré ou invalide, suppression du token...');
+          localStorage.removeItem('authToken');
+          setToken(null);
+          setError("Session expirée. Veuillez recharger la page pour vous reconnecter.");
+        } else {
+          setError(`Erreur lors du chargement des échéances: ${err.response?.status} ${err.response?.statusText}`);
+        }
+      } else {
+        console.error("❌ Erreur lors du chargement des échéances inattendue :", err);
+        setError("Une erreur inattendue s'est produite lors du chargement des échéances.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  const fetchFournisseurs = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await getFournisseurs(token);
+      setFournisseurs(res.data);
+    } catch (err) {
+      console.error("Erreur lors du chargement des fournisseurs:", err);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (token) {
+      fetchEcheances();
+      fetchFournisseurs();
+    }
+  }, [token, fetchEcheances, fetchFournisseurs]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) {
+      setError("Pas de token d'authentification.");
+      return;
+    }
+
+    try {
+      const dataToSend = {
+        ...formData,
+        montant: formData.montant ? parseFloat(formData.montant) : null,
+        fournisseur: formData.fournisseur ? parseInt(formData.fournisseur) : null
+      };
+
+      if (editingEcheance) {
+        await updateEcheance(editingEcheance.id, dataToSend, token);
+      } else {
+        await createEcheance(dataToSend, token);
+      }
+      
+      fetchEcheances();
+      setShowForm(false);
+      setEditingEcheance(null);
+      setFormData({ titre: '', description: '', date_echeance: '', montant: '', statut: 'en_attente', fournisseur: '' });
+    } catch (err: unknown) {
+      if (isAxiosError(err)) {
+        console.error("Erreur lors de l'opération sur l'échéance :", err);
+        setError("Erreur lors de l'enregistrement de l'échéance. Veuillez réessayer.");
+      } else {
+        console.error("Erreur lors de l'opération sur l'échéance inattendue :", err);
+        setError("Une erreur inattendue s'est produite lors de l'enregistrement de l'échéance.");
+      }
+    }
+  };
+
+  const handleEdit = (echeance: Echeance) => {
+    setEditingEcheance(echeance);
+    setFormData({
+      titre: echeance.titre,
+      description: echeance.description || '',
+      date_echeance: echeance.date_echeance,
+      montant: echeance.montant?.toString() || '',
+      statut: echeance.statut,
+      fournisseur: echeance.fournisseur?.toString() || ''
+    });
+    setShowForm(true);
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!token) {
+      setError("Pas de token d'authentification.");
+      return;
+    }
+    if (confirm('Êtes-vous sûr de vouloir supprimer cette échéance ?')) {
+      try {
+        await deleteEcheance(id, token);
+        fetchEcheances();
+      } catch (err: unknown) {
+        if (isAxiosError(err)) {
+          console.error("Erreur lors de la suppression de l'échéance :", err);
+          setError("Erreur lors de la suppression de l'échéance. Veuillez réessayer.");
+        } else {
+          console.error("Erreur lors de la suppression de l'échéance inattendue :", err);
+          setError("Une erreur inattendue s'est produite lors de la suppression de l'échéance.");
+        }
+      }
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value
+    });
+  };
 
   const getStatutColor = (statut: string) => {
     switch (statut) {
-      case 'Payé':
+      case 'paye':
         return 'bg-green-100 text-green-800';
-      case 'En attente':
+      case 'en_attente':
         return 'bg-yellow-100 text-yellow-800';
-      case 'En retard':
+      case 'retard':
         return 'bg-red-100 text-red-800';
+      case 'annule':
+        return 'bg-gray-100 text-gray-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -65,14 +240,31 @@ const Echeances: React.FC = () => {
 
   const getStatutIcon = (statut: string) => {
     switch (statut) {
-      case 'Payé':
+      case 'paye':
         return <CheckCircle className="w-4 h-4" />;
-      case 'En attente':
+      case 'en_attente':
         return <Clock className="w-4 h-4" />;
-      case 'En retard':
+      case 'retard':
         return <AlertTriangle className="w-4 h-4" />;
+      case 'annule':
+        return <Clock className="w-4 h-4" />;
       default:
         return <Clock className="w-4 h-4" />;
+    }
+  };
+
+  const getStatutLabel = (statut: string) => {
+    switch (statut) {
+      case 'paye':
+        return 'Payé';
+      case 'en_attente':
+        return 'En attente';
+      case 'retard':
+        return 'En retard';
+      case 'annule':
+        return 'Annulé';
+      default:
+        return statut;
     }
   };
 
@@ -86,80 +278,20 @@ const Echeances: React.FC = () => {
   const isDateOverdue = (date: string, statut: string) => {
     const today = new Date();
     const targetDate = new Date(date);
-    return targetDate < today && statut !== 'Payé';
+    return targetDate < today && statut !== 'paye';
   };
 
-  const echeancesEnRetard = echeances.filter(e => e.statut === 'En retard');
+  const echeancesEnRetard = echeances.filter(e => e.statut === 'retard');
   const echeancesProches = echeances.filter(e => {
     const today = new Date();
-    const datePaiement = new Date(e.datePrevuePaiement);
-    const diffTime = datePaiement.getTime() - today.getTime();
+    const dateEcheance = new Date(e.date_echeance);
+    const diffTime = dateEcheance.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays <= 7 && diffDays >= 0 && e.statut === 'En attente';
+    return diffDays <= 7 && diffDays >= 0 && e.statut === 'en_attente';
   });
 
-  const renderCalendarView = () => {
-    const today = new Date();
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
-    
-    // Générer les jours du mois
-    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-    const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
-    
-    const days = [];
-    
-    // Jours vides au début
-    for (let i = 0; i < firstDayOfMonth; i++) {
-      days.push(<div key={`empty-${i}`} className="h-24 border border-gray-200"></div>);
-    }
-    
-    // Jours du mois
-    for (let day = 1; day <= daysInMonth; day++) {
-      const currentDate = new Date(currentYear, currentMonth, day);
-      const dateString = currentDate.toISOString().split('T')[0];
-      
-      let eventsForDay = [];
-      
-      if (activeCalendar === 'paiements') {
-        eventsForDay = echeances.filter(e => e.datePrevuePaiement === dateString);
-      } else if (activeCalendar === 'commandes') {
-        eventsForDay = echeances.filter(e => 
-          e.dateDebutCommande === dateString || e.dateFinCommande === dateString
-        );
-      }
-      
-      days.push(
-        <div key={day} className="h-24 border border-gray-200 p-1 overflow-hidden">
-          <div className="text-sm font-medium text-gray-900 mb-1">{day}</div>
-          {eventsForDay.map((event, index) => (
-            <div
-              key={index}
-              className={`text-xs p-1 rounded mb-1 truncate ${
-                activeCalendar === 'paiements' 
-                  ? getStatutColor(event.statut).replace('text-', 'text-').replace('bg-', 'bg-')
-                  : 'bg-blue-100 text-blue-800'
-              }`}
-              title={`${event.fournisseur} - ${formatCurrency(event.montant)}`}
-            >
-              {event.fournisseur}
-            </div>
-          ))}
-        </div>
-      );
-    }
-    
-    return (
-      <div className="grid grid-cols-7 gap-0">
-        {['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'].map(day => (
-          <div key={day} className="bg-gray-50 p-2 text-center text-sm font-medium text-gray-700 border border-gray-200">
-            {day}
-          </div>
-        ))}
-        {days}
-      </div>
-    );
-  };
+  if (loading) return <div className="text-center text-gray-600">Chargement des échéances...</div>;
+  if (error) return <div className="text-center text-red-600">Erreur: {error}</div>;
 
   return (
     <div className="space-y-6">
@@ -168,7 +300,118 @@ const Echeances: React.FC = () => {
           <h2 className="text-2xl font-bold text-gray-900">Gestion des Échéances</h2>
           <p className="text-gray-600">Suivez vos échéances de paiement et planifiez vos commandes</p>
         </div>
+        <button 
+          onClick={() => setShowForm(true)}
+          className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Nouvelle échéance</span>
+        </button>
       </div>
+
+      {/* Formulaire d'ajout/modification */}
+      {showForm && (
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            {editingEcheance ? 'Modifier l\'échéance' : 'Ajouter une nouvelle échéance'}
+          </h3>
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Titre</label>
+              <input
+                type="text"
+                name="titre"
+                value={formData.titre}
+                onChange={handleInputChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Date d'échéance</label>
+              <input
+                type="date"
+                name="date_echeance"
+                value={formData.date_echeance}
+                onChange={handleInputChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Montant (€)</label>
+              <input
+                type="number"
+                step="0.01"
+                name="montant"
+                value={formData.montant}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
+              <select
+                name="statut"
+                value={formData.statut}
+                onChange={handleInputChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="en_attente">En attente</option>
+                <option value="paye">Payé</option>
+                <option value="retard">En retard</option>
+                <option value="annule">Annulé</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Fournisseur (optionnel)</label>
+              <select
+                name="fournisseur"
+                value={formData.fournisseur}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Sélectionner un fournisseur</option>
+                {fournisseurs.map((fournisseur) => (
+                  <option key={fournisseur.id} value={fournisseur.id}>
+                    {fournisseur.nom}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <textarea
+                name="description"
+                value={formData.description}
+                onChange={handleInputChange}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div className="md:col-span-2 flex space-x-3">
+              <button
+                type="submit"
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                {editingEcheance ? 'Modifier' : 'Ajouter'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowForm(false);
+                  setEditingEcheance(null);
+                  setFormData({ titre: '', description: '', date_echeance: '', montant: '', statut: 'en_attente', fournisseur: '' });
+                }}
+                className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors"
+              >
+                Annuler
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Alertes */}
       {(echeancesEnRetard.length > 0 || echeancesProches.length > 0) && (
@@ -182,8 +425,10 @@ const Echeances: React.FC = () => {
               <div className="space-y-2">
                 {echeancesEnRetard.map(echeance => (
                   <div key={echeance.id} className="flex justify-between items-center">
-                    <span className="text-red-800">{echeance.fournisseur} - {echeance.produit}</span>
-                    <span className="font-medium text-red-900">{formatCurrency(echeance.montant)}</span>
+                    <span className="text-red-800">{echeance.titre}</span>
+                    <span className="font-medium text-red-900">
+                      {echeance.montant ? formatCurrency(echeance.montant) : 'Montant non défini'}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -199,8 +444,10 @@ const Echeances: React.FC = () => {
               <div className="space-y-2">
                 {echeancesProches.map(echeance => (
                   <div key={echeance.id} className="flex justify-between items-center">
-                    <span className="text-yellow-800">{echeance.fournisseur} - {echeance.produit}</span>
-                    <span className="font-medium text-yellow-900">{formatCurrency(echeance.montant)}</span>
+                    <span className="text-yellow-800">{echeance.titre}</span>
+                    <span className="font-medium text-yellow-900">
+                      {echeance.montant ? formatCurrency(echeance.montant) : 'Montant non défini'}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -208,42 +455,6 @@ const Echeances: React.FC = () => {
           )}
         </div>
       )}
-
-      {/* Sélecteur de calendrier */}
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-        <div className="flex space-x-4 mb-6">
-          <button
-            onClick={() => setActiveCalendar('paiements')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
-              activeCalendar === 'paiements'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            <DollarSign className="w-4 h-4" />
-            <span>Calendrier d'échéances</span>
-          </button>
-          <button
-            onClick={() => setActiveCalendar('commandes')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
-              activeCalendar === 'commandes'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            <Calendar className="w-4 h-4" />
-            <span>Calendrier des commandes</span>
-          </button>
-        </div>
-
-        <div className="mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">
-            {new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
-          </h3>
-        </div>
-
-        {renderCalendarView()}
-      </div>
 
       {/* Liste détaillée des échéances */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -255,25 +466,22 @@ const Echeances: React.FC = () => {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Titre
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Fournisseur
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Produit
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Période commande
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Date prévue paiement
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Date paiement effectif
+                  Date d'échéance
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Montant
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Statut
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
                 </th>
               </tr>
             </thead>
@@ -282,45 +490,56 @@ const Echeances: React.FC = () => {
                 <tr 
                   key={echeance.id} 
                   className={`hover:bg-gray-50 ${
-                    isDateOverdue(echeance.datePrevuePaiement, echeance.statut) ? 'bg-red-50' : ''
+                    isDateOverdue(echeance.date_echeance, echeance.statut) ? 'bg-red-50' : ''
                   }`}
                 >
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{echeance.fournisseur}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{echeance.produit}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
-                      {new Date(echeance.dateDebutCommande).toLocaleDateString('fr-FR')} - {new Date(echeance.dateFinCommande).toLocaleDateString('fr-FR')}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className={`text-sm ${
-                      isDateOverdue(echeance.datePrevuePaiement, echeance.statut) 
-                        ? 'text-red-600 font-medium' 
-                        : 'text-gray-900'
-                    }`}>
-                      {new Date(echeance.datePrevuePaiement).toLocaleDateString('fr-FR')}
-                    </div>
+                    <div className="text-sm font-medium text-gray-900">{echeance.titre}</div>
+                    {echeance.description && (
+                      <div className="text-sm text-gray-500">{echeance.description}</div>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">
-                      {echeance.datePaiementEffectif 
-                        ? new Date(echeance.datePaiementEffectif).toLocaleDateString('fr-FR')
-                        : '-'
+                      {echeance.fournisseur 
+                        ? fournisseurs.find(f => f.id === echeance.fournisseur)?.nom || 'Fournisseur inconnu'
+                        : 'Aucun fournisseur'
                       }
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{formatCurrency(echeance.montant)}</div>
+                    <div className={`text-sm ${
+                      isDateOverdue(echeance.date_echeance, echeance.statut) 
+                        ? 'text-red-600 font-medium' 
+                        : 'text-gray-900'
+                    }`}>
+                      {new Date(echeance.date_echeance).toLocaleDateString('fr-FR')}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">
+                      {echeance.montant ? formatCurrency(echeance.montant) : 'Non défini'}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex items-center space-x-1 px-2 py-1 text-xs font-semibold rounded-full ${getStatutColor(echeance.statut)}`}>
                       {getStatutIcon(echeance.statut)}
-                      <span>{echeance.statut}</span>
+                      <span>{getStatutLabel(echeance.statut)}</span>
                     </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <button 
+                      onClick={() => handleEdit(echeance)}
+                      className="text-blue-600 hover:text-blue-900 mr-3"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={() => handleDelete(echeance.id)}
+                      className="text-red-600 hover:text-red-900"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </td>
                 </tr>
               ))}

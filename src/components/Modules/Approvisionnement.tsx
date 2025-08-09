@@ -7,7 +7,8 @@ import {
   Truck, 
   ShoppingCart,
   MapPin,
-  Building
+  Building,
+  Bug
 } from 'lucide-react';
 import GestionFournisseurs from './Approvisionnement/GestionFournisseurs';
 import Produits from './Approvisionnement/Produits';
@@ -16,11 +17,14 @@ import Livraisons from './Approvisionnement/Livraisons';
 import Echeances from './Approvisionnement/Echeances';
 import ImportTransit from './Approvisionnement/ImportTransit';
 import CommandesAchats from './Approvisionnement/CommandesAchats';
+import TestAPI from './Approvisionnement/TestAPI';
+import Saisons from './Approvisionnement/Saisons';
 
 const Approvisionnement: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('fournisseurs');
+  const [activeTab, setActiveTab] = useState('test');
 
   const tabs = [
+    { id: 'test', name: 'Test API', icon: Bug },
     { id: 'fournisseurs', name: 'Gestion des Fournisseurs', icon: Users },
     { id: 'echeances', name: 'Échéances', icon: Calendar },
     { id: 'produits', name: 'Produits', icon: Package },
@@ -28,10 +32,13 @@ const Approvisionnement: React.FC = () => {
     { id: 'livraisons', name: 'Livraisons', icon: Truck },
     { id: 'commandes-achats', name: 'Commandes d\'Achats', icon: ShoppingCart },
     { id: 'import', name: 'Import/Transit', icon: MapPin },
+    { id: 'saisons', name: 'Saisons', icon: Building },
   ];
 
   const renderTabContent = () => {
     switch (activeTab) {
+      case 'test':
+        return <TestAPI />;
       case 'fournisseurs':
         return <GestionFournisseurs />;
       case 'echeances':
@@ -46,8 +53,10 @@ const Approvisionnement: React.FC = () => {
         return <CommandesAchats />;
       case 'import':
         return <ImportTransit />;
+      case 'saisons':
+        return <Saisons />;
       default:
-        return <GestionFournisseurs />;
+        return <TestAPI />;
     }
   };
 

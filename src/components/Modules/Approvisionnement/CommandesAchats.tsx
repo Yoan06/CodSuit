@@ -1,135 +1,131 @@
-import React, { useState } from 'react';
-import { Search, Filter, Package, FileText, Eye } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Package, FileText, Eye } from 'lucide-react';
+import { getProduits } from '../../../services/produitService';
+import { getBonsCommande } from '../../../services/bonCommandeService';
+import { getLivraisons } from '../../../services/livraisonService';
 
-interface ProduitAchat {
+interface Produit {
   id: number;
   nom: string;
   categorie: string;
-  fournisseur: string;
-  dateAjout: string;
-  bonsLivraison: {
-    id: number;
-    numero: string;
-    quantite: number;
-    dateLivraison: string;
-    statut: string;
-  }[];
-  bonsCommande: {
-    id: number;
-    numero: string;
-    quantite: number;
-    dateCommande: string;
-    statut: string;
-  }[];
+  fournisseur: number;
+  date_lancement?: string;
+}
+
+interface BonCommande {
+  id: number;
+  numero: string;
+  produit: number;
+  quantite: number;
+  date_debut: string;
+  statut: string;
+}
+
+interface Livraison {
+  id: number;
+  numero_commande: string;
+  produit: number;
+  quantite: number;
+  date_livraison: string;
+  statut: string;
+}
+
+// Produit enrichi utilisé uniquement pour l'affichage agrégé
+interface ProduitAvecBons extends Produit {
+  bonsLivraison: Livraison[];
+  bonsCommande: BonCommande[];
 }
 
 const CommandesAchats: React.FC = () => {
-  const [selectedProduit, setSelectedProduit] = useState<ProduitAchat | null>(null);
+  const [selectedProduit, setSelectedProduit] = useState<ProduitAvecBons | null>(null);
   const [viewType, setViewType] = useState<'livraison' | 'commande'>('livraison');
-  
-  const [produits] = useState<ProduitAchat[]>([
-    {
-      id: 1,
-      nom: 'Smartphone XYZ Pro',
-      categorie: 'Électronique',
-      fournisseur: 'TechnoSupply SARL',
-      dateAjout: '2024-01-15',
-      bonsLivraison: [
-        {
-          id: 1,
-          numero: 'BL-2024-001',
-          quantite: 50,
-          dateLivraison: '2024-01-30',
-          statut: 'Livré'
-        },
-        {
-          id: 2,
-          numero: 'BL-2024-005',
-          quantite: 25,
-          dateLivraison: '2024-02-15',
-          statut: 'En transit'
+  const [produits, setProduits] = useState<Produit[]>([]);
+  const [bonsCommande, setBonsCommande] = useState<BonCommande[]>([]);
+  const [livraisons, setLivraisons] = useState<Livraison[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+
+  // Authentification et récupération du token
+  useEffect(() => {
+    const authenticate = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/token/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: 'yoan', password: 'test12345' })
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setToken(data.access);
+          localStorage.setItem('authToken', data.access);
+        } else {
+          setError("Impossible de s'authentifier");
         }
-      ],
-      bonsCommande: [
-        {
-          id: 1,
-          numero: 'BC-2024-001',
-          quantite: 75,
-          dateCommande: '2024-01-15',
-          statut: 'Envoyée'
-        }
-      ]
-    },
-    {
-      id: 2,
-      nom: 'Laptop Business 15"',
-      categorie: 'Informatique',
-      fournisseur: 'GlobalParts Ltd',
-      dateAjout: '2024-01-20',
-      bonsLivraison: [
-        {
-          id: 3,
-          numero: 'BL-2024-003',
-          quantite: 20,
-          dateLivraison: '2024-02-05',
-          statut: 'Livré'
-        }
-      ],
-      bonsCommande: [
-        {
-          id: 2,
-          numero: 'BC-2024-002',
-          quantite: 25,
-          dateCommande: '2024-01-20',
-          statut: 'Reçue'
-        },
-        {
-          id: 3,
-          numero: 'BC-2024-007',
-          quantite: 15,
-          dateCommande: '2024-02-10',
-          statut: 'À envoyer'
-        }
-      ]
-    },
-    {
-      id: 3,
-      nom: 'Tablet Pro 10"',
-      categorie: 'Électronique',
-      fournisseur: 'TechAccessories Inc',
-      dateAjout: '2024-02-01',
-      bonsLivraison: [],
-      bonsCommande: [
-        {
-          id: 4,
-          numero: 'BC-2024-004',
-          quantite: 30,
-          dateCommande: '2024-02-01',
-          statut: 'À envoyer'
-        }
-      ]
+      } catch (err: unknown) {
+        console.error("Erreur d'authentification:", err);
+        setError("Erreur d'authentification");
+      }
+    };
+    const storedToken = localStorage.getItem('authToken');
+    if (storedToken) setToken(storedToken);
+    else authenticate();
+  }, []);
+
+  // Récupération des données
+  const fetchAll = useCallback(async () => {
+    if (!token) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const [resProduits, resBonsCommande, resLivraisons] = await Promise.all([
+        getProduits(token),
+        getBonsCommande(token),
+        getLivraisons(token)
+      ]);
+      setProduits(resProduits.data);
+      setBonsCommande(resBonsCommande.data);
+      setLivraisons(resLivraisons.data);
+    } catch (err: unknown) {
+      console.error("Erreur lors du chargement des données:", err);
+      setError("Erreur lors du chargement des données.");
+    } finally {
+      setLoading(false);
     }
-  ]);
+  }, [token]);
+
+  useEffect(() => {
+    if (token) fetchAll();
+  }, [token, fetchAll]);
 
   const getStatutColor = (statut: string) => {
     switch (statut) {
-      case 'Livré':
-      case 'Reçue':
+      case 'livree':
+      case 'recue':
         return 'bg-green-100 text-green-800';
-      case 'En transit':
-      case 'Envoyée':
+      case 'en_cours':
+      case 'envoyee':
         return 'bg-blue-100 text-blue-800';
-      case 'À envoyer':
+      case 'a_envoyer':
         return 'bg-yellow-100 text-yellow-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const handleViewBons = (produit: ProduitAchat, type: 'livraison' | 'commande') => {
-    setSelectedProduit(produit);
-    setViewType(type);
-  };
+  if (loading) return <div className="text-center text-gray-600">Chargement...</div>;
+  if (error) return <div className="text-center text-red-600">{error}</div>;
+
+  // Regroupement des bons par produit
+  const produitsAvecBons: ProduitAvecBons[] = produits.map((produit) => {
+    const bonsLivraison = livraisons.filter(l => l.produit === produit.id);
+    const bonsCommandeProduit = bonsCommande.filter(bc => bc.produit === produit.id);
+    return {
+      ...produit,
+      bonsLivraison,
+      bonsCommande: bonsCommandeProduit
+    } as ProduitAvecBons;
+  });
 
   return (
     <div className="space-y-6">
@@ -140,52 +136,21 @@ const CommandesAchats: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-          <input
-            type="text"
-            placeholder="Rechercher un produit..."
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-        </div>
-        <button className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-          <Filter className="w-4 h-4" />
-          <span>Filtrer</span>
-        </button>
-      </div>
-
       {/* Liste des produits */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Produit
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Catégorie
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Fournisseur
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Date d'ajout
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Bons de livraison
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Bons de commande
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Produit</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Catégorie</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bons de livraison</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bons de commande</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {produits.map((produit) => (
+              {produitsAvecBons.map((produit) => (
                 <tr key={produit.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
@@ -201,19 +166,11 @@ const CommandesAchats: React.FC = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{produit.fournisseur}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
-                      {new Date(produit.dateAjout).toLocaleDateString('fr-FR')}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center space-x-2">
                       <span className="text-sm font-medium text-gray-900">{produit.bonsLivraison.length}</span>
                       {produit.bonsLivraison.length > 0 && (
                         <button
-                          onClick={() => handleViewBons(produit, 'livraison')}
+                          onClick={() => { setSelectedProduit(produit); setViewType('livraison'); }}
                           className="text-blue-600 hover:text-blue-900"
                           title="Voir les bons de livraison"
                         >
@@ -227,7 +184,7 @@ const CommandesAchats: React.FC = () => {
                       <span className="text-sm font-medium text-gray-900">{produit.bonsCommande.length}</span>
                       {produit.bonsCommande.length > 0 && (
                         <button
-                          onClick={() => handleViewBons(produit, 'commande')}
+                          onClick={() => { setSelectedProduit(produit); setViewType('commande'); }}
                           className="text-green-600 hover:text-green-900"
                           title="Voir les bons de commande"
                         >
@@ -295,47 +252,31 @@ const CommandesAchats: React.FC = () => {
               <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Numéro
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Quantité
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      {viewType === 'livraison' ? 'Date de livraison' : 'Date de commande'}
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Statut
-                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Numéro</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quantité</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{viewType === 'livraison' ? 'Date de livraison' : 'Date de commande'}</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Statut</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {viewType === 'livraison' 
-                    ? selectedProduit.bonsLivraison.map((bon) => (
+                  {viewType === 'livraison'
+                    ? selectedProduit.bonsLivraison.map((bon: Livraison) => (
                         <tr key={bon.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-4 text-sm font-medium text-gray-900">{bon.numero}</td>
+                          <td className="px-4 py-4 text-sm font-medium text-gray-900">{bon.numero_commande}</td>
                           <td className="px-4 py-4 text-sm text-gray-900">{bon.quantite}</td>
-                          <td className="px-4 py-4 text-sm text-gray-900">
-                            {new Date(bon.dateLivraison).toLocaleDateString('fr-FR')}
-                          </td>
+                          <td className="px-4 py-4 text-sm text-gray-900">{new Date(bon.date_livraison).toLocaleDateString('fr-FR')}</td>
                           <td className="px-4 py-4">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatutColor(bon.statut)}`}>
-                              {bon.statut}
-                            </span>
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatutColor(bon.statut)}`}>{bon.statut}</span>
                           </td>
                         </tr>
                       ))
-                    : selectedProduit.bonsCommande.map((bon) => (
+                    : selectedProduit.bonsCommande.map((bon: BonCommande) => (
                         <tr key={bon.id} className="hover:bg-gray-50">
                           <td className="px-4 py-4 text-sm font-medium text-gray-900">{bon.numero}</td>
                           <td className="px-4 py-4 text-sm text-gray-900">{bon.quantite}</td>
-                          <td className="px-4 py-4 text-sm text-gray-900">
-                            {new Date(bon.dateCommande).toLocaleDateString('fr-FR')}
-                          </td>
+                          <td className="px-4 py-4 text-sm text-gray-900">{new Date(bon.date_debut).toLocaleDateString('fr-FR')}</td>
                           <td className="px-4 py-4">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatutColor(bon.statut)}`}>
-                              {bon.statut}
-                            </span>
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatutColor(bon.statut)}`}>{bon.statut}</span>
                           </td>
                         </tr>
                       ))
