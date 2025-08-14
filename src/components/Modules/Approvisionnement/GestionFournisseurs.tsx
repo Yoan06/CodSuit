@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Search, Filter, Edit, Trash2 } from 'lucide-react';
-import { getFournisseurs, createFournisseur, updateFournisseur, deleteFournisseur, login } from '../../../services/fournisseurService';
+import { getFournisseurs, createFournisseur, updateFournisseur, deleteFournisseur } from '../../../services/fournisseurService';
+import { useAuth } from '../../../contexts/AuthContext';
 import { AxiosError } from 'axios';
 
 interface Fournisseur {
@@ -15,6 +16,7 @@ interface Fournisseur {
 }
 
 const GestionFournisseurs: React.FC = () => {
+  const { token, currentUser, isAuthenticated } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [editingFournisseur, setEditingFournisseur] = useState<Fournisseur | null>(null);
   const [fournisseurs, setFournisseurs] = useState<Fournisseur[]>([]);
@@ -26,7 +28,6 @@ const GestionFournisseurs: React.FC = () => {
     ville: '',
     pays: '',
   });
-  const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,29 +36,17 @@ const GestionFournisseurs: React.FC = () => {
     return (err as AxiosError).isAxiosError === true;
   };
 
-  // Gérer l'authentification (pour le test, à remplacer par un contexte d'auth global)
+  // Vérifier l'authentification
   useEffect(() => {
-    const authenticate = async () => {
-      console.log('🔐 Tentative d\'authentification...');
-      try {
-        // Utilise des identifiants de test ou récupère-les de façon sécurisée
-        console.log('📡 Envoi de la requête d\'authentification...');
-        const res = await login('yoan', 'test12345'); // Utilisateur 'yoan' avec mot de passe 'test12345'
-        console.log('✅ Authentification réussie:', res.data);
-        setToken(res.data.access);
-      } catch (err: unknown) {
-        if (isAxiosError(err)) {
-          console.error("❌ Erreur d'authentification :", err);
-          console.error("Détails de l'erreur:", err.response?.data || err.message);
-          setError("Impossible de s'authentifier. Vérifiez le backend et les identifiants.");
-        } else {
-          console.error("❌ Erreur d'authentification inattendue :", err);
-          setError("Une erreur inattendue s'est produite lors de l'authentification.");
-        }
-      }
-    };
-    authenticate();
-  }, []);
+    if (!isAuthenticated || !token) {
+      console.log('❌ Utilisateur non authentifié');
+      setError("Vous devez être connecté pour accéder à cette fonctionnalité.");
+      setLoading(false);
+    } else {
+      console.log('🔐 Utilisateur authentifié:', currentUser);
+      setLoading(false);
+    }
+  }, [isAuthenticated, token, currentUser]);
 
   const fetchFournisseurs = useCallback(async () => {
     if (!token) {
@@ -83,13 +72,13 @@ const GestionFournisseurs: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [token]); // token est une dépendance de fetchFournisseurs
+  }, [token]);
 
   useEffect(() => {
     if (token) {
       fetchFournisseurs();
     }
-  }, [token, fetchFournisseurs]); // Ajout de fetchFournisseurs ici
+  }, [token, fetchFournisseurs]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -169,7 +158,14 @@ const GestionFournisseurs: React.FC = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Gestion des Fournisseurs</h2>
-          <p className="text-gray-600">Gérez vos partenaires et leurs performances</p>
+          <p className="text-gray-600">
+            Gérez vos partenaires et leurs performances
+            {currentUser && (
+              <span className="block text-sm text-blue-600 mt-1">
+                Connecté en tant que : <strong>{currentUser}</strong>
+              </span>
+            )}
+          </p>
         </div>
         <button 
           onClick={() => setShowForm(true)}
@@ -273,6 +269,15 @@ const GestionFournisseurs: React.FC = () => {
         </div>
       )}
 
+      {/* Informations sur les fournisseurs */}
+      {fournisseurs.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <p className="text-blue-800 text-sm">
+            <strong>{fournisseurs.length}</strong> fournisseur{fournisseurs.length > 1 ? 's' : ''} trouvé{fournisseurs.length > 1 ? 's' : ''} pour l'utilisateur <strong>{currentUser}</strong>
+          </p>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -311,40 +316,58 @@ const GestionFournisseurs: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {fournisseurs.map((fournisseur) => (
-                <tr key={fournisseur.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">{fournisseur.nom}</div>
-                      <div className="text-sm text-gray-500">{fournisseur.adresse}</div>
+              {fournisseurs.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                    <div className="flex flex-col items-center space-y-2">
+                      <p className="text-lg font-medium">Aucun fournisseur trouvé</p>
+                      <p className="text-sm">Vous n'avez pas encore ajouté de fournisseurs pour votre compte.</p>
+                      <button 
+                        onClick={() => setShowForm(true)}
+                        className="mt-2 inline-flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Ajouter votre premier fournisseur</span>
+                      </button>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{fournisseur.email}</div>
-                    <div className="text-sm text-gray-500">{fournisseur.telephone}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{fournisseur.ville}, {fournisseur.pays}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {fournisseur.date_ajout ? new Date(fournisseur.date_ajout).toLocaleDateString() : 'N/A'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button 
-                      onClick={() => handleEdit(fournisseur)}
-                      className="text-blue-600 hover:text-blue-900 mr-3"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    <button 
-                      onClick={() => handleDelete(fournisseur.id)}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      <Trash2 className="w-4 h-4" />
+                </tr>
+              ) : (
+                fournisseurs.map((fournisseur) => (
+                  <tr key={fournisseur.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">{fournisseur.nom}</div>
+                        <div className="text-sm text-gray-500">{fournisseur.adresse}</div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{fournisseur.email}</div>
+                      <div className="text-sm text-gray-500">{fournisseur.telephone}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{fournisseur.ville}, {fournisseur.pays}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {fournisseur.date_ajout ? new Date(fournisseur.date_ajout).toLocaleDateString() : 'N/A'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <button 
+                        onClick={() => handleEdit(fournisseur)}
+                        className="text-blue-600 hover:text-blue-900 mr-3"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(fournisseur.id)}
+                        className="text-red-600 hover:text-red-900"
+                      >
+                        <Trash2 className="w-4 h-4" />
                     </button>
                   </td>
                 </tr>
-              ))}
+              ))
+            )}
             </tbody>
           </table>
         </div>

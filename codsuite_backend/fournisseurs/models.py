@@ -12,7 +12,8 @@ class Saison(models.Model):
         return self.nom
 
 class Fournisseur(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    #user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="fournisseurs")
     nom = models.CharField(max_length=255)
     email = models.EmailField(blank=True, null=True)
     telephone = models.CharField(max_length=20, blank=True, null=True)
@@ -20,6 +21,7 @@ class Fournisseur(models.Model):
     ville = models.CharField(max_length=100, blank=True, null=True)
     pays = models.CharField(max_length=100, blank=True, null=True)
     date_ajout = models.DateTimeField(auto_now_add=True)
+  
 
     class Meta:
         verbose_name_plural = "Fournisseurs"
@@ -109,6 +111,11 @@ class Livraison(models.Model):
         ('en_cours', 'En cours'),
         ('livree', 'Livrée')
     ], default='a_livrer')
+    niveau = models.CharField(max_length=20, choices=[
+        ('en_transit', 'En transit'),
+        ('en_douane', 'En douane'),
+        ('livree', 'Livrée')
+    ], default='en_transit')
     bon_livraison_numero = models.CharField(max_length=50, blank=True, null=True)
     livreur = models.CharField(max_length=100, blank=True, null=True)
     date_creation = models.DateTimeField(auto_now_add=True)
@@ -187,3 +194,25 @@ class EtapeTransit(models.Model):
 
     def __str__(self):
         return f"{self.import_transit.numero_commande} - {self.lieu}"
+
+class HistoriqueLieu(models.Model):
+    """Modèle pour tracer l'historique des lieux par lesquels sont passés les produits"""
+    import_transit = models.ForeignKey(ImportTransit, on_delete=models.CASCADE, related_name='historique_lieux')
+    lieu = models.CharField(max_length=255)
+    date_passage = models.DateField()
+    description = models.TextField(blank=True, null=True)
+    statut = models.CharField(max_length=50, choices=[
+        ('en_cours', 'En cours'),
+        ('termine', 'Terminé'),
+        ('retarde', 'Retardé')
+    ], default='en_cours')
+    notes = models.TextField(blank=True, null=True)
+    ordre = models.IntegerField(default=0)
+    date_creation = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name_plural = "Historique des lieux"
+        ordering = ['ordre', 'date_passage']
+
+    def __str__(self):
+        return f"{self.import_transit.numero_commande} - {self.lieu} ({self.date_passage})"

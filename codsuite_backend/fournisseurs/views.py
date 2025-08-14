@@ -1,10 +1,10 @@
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
-from .models import Fournisseur, Echeance, Produit, BonCommande, Livraison, CommandeAchat, ImportTransit, EtapeTransit, Saison
+from .models import Fournisseur, Echeance, Produit, BonCommande, Livraison, CommandeAchat, ImportTransit, EtapeTransit, Saison, HistoriqueLieu
 from .serializers import (
     FournisseurSerializer, EcheanceSerializer, ProduitSerializer, 
     BonCommandeSerializer, LivraisonSerializer, CommandeAchatSerializer, 
-    ImportTransitSerializer, EtapeTransitSerializer, SaisonSerializer
+    ImportTransitSerializer, EtapeTransitSerializer, SaisonSerializer, HistoriqueLieuSerializer
 )
 
 class FournisseurViewSet(viewsets.ModelViewSet):
@@ -96,3 +96,13 @@ class SaisonViewSet(viewsets.ModelViewSet):
     queryset = Saison.objects.all()
     serializer_class = SaisonSerializer
     permission_classes = [IsAuthenticated]
+
+class HistoriqueLieuViewSet(viewsets.ModelViewSet):
+    serializer_class = HistoriqueLieuSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return HistoriqueLieu.objects.filter(import_transit__user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save()

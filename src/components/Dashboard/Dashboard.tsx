@@ -9,6 +9,7 @@ import {
   Clock,
   DollarSign
 } from 'lucide-react';
+import TestAuth from '../TestAuth';
 
 const Dashboard: React.FC = () => {
   const stats = [
@@ -108,6 +109,11 @@ const Dashboard: React.FC = () => {
             </div>
           );
         })}
+      </div>
+
+      {/* Test d'Authentification */}
+      <div className="mb-6">
+        <TestAuth />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

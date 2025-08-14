@@ -59,9 +59,9 @@ const Saisons: React.FC = () => {
                   {produitsDeSaison.map(p => (
                     <li key={p.id}>{p.nom}</li>
                   ))}
-                </ul>
+          </ul>
               )}
-            </div>
+        </div>
           );
         })}
       </div>
@@ -69,4 +69,4 @@ const Saisons: React.FC = () => {
   );
 };
 
-export default Saisons;
+export default Saisons; 

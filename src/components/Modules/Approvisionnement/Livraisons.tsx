@@ -15,6 +15,7 @@ interface Livraison {
   quantite: number;
   date_livraison: string;
   statut: 'a_livrer' | 'en_cours' | 'livree';
+  niveau: 'en_transit' | 'en_douane' | 'livree';
   bon_livraison_numero?: string;
   livreur?: string;
   date_creation?: string;
@@ -35,6 +36,7 @@ const Livraisons: React.FC = () => {
     quantite: '',
     date_livraison: '',
     statut: 'a_livrer' as 'a_livrer' | 'en_cours' | 'livree',
+    niveau: 'en_transit' as 'en_transit' | 'en_douane' | 'livree',
     bon_livraison_numero: '',
     livreur: ''
   });
@@ -109,6 +111,7 @@ const Livraisons: React.FC = () => {
         quantite: parseInt(formData.quantite),
         date_livraison: formData.date_livraison,
         statut: formData.statut,
+        niveau: formData.niveau,
         bon_livraison_numero: formData.bon_livraison_numero || undefined,
         livreur: formData.livreur || undefined
       };
@@ -120,7 +123,7 @@ const Livraisons: React.FC = () => {
       fetchLivraisons();
       setShowForm(false);
       setEditingLivraison(null);
-      setFormData({ numero_commande: '', produit: '', quantite: '', date_livraison: '', statut: 'a_livrer', bon_livraison_numero: '', livreur: '' });
+      setFormData({ numero_commande: '', produit: '', quantite: '', date_livraison: '', statut: 'a_livrer', niveau: 'en_transit', bon_livraison_numero: '', livreur: '' });
     } catch {
       setError("Erreur lors de l'enregistrement de la livraison.");
     }
@@ -134,6 +137,7 @@ const Livraisons: React.FC = () => {
       quantite: livraison.quantite.toString(),
       date_livraison: livraison.date_livraison,
       statut: livraison.statut,
+      niveau: livraison.niveau,
       bon_livraison_numero: livraison.bon_livraison_numero || '',
       livreur: livraison.livreur || ''
     });
@@ -152,23 +156,7 @@ const Livraisons: React.FC = () => {
     }
   };
 
-  const getStatutColor = (statut: string) => {
-    switch (statut) {
-      case 'livree': return 'bg-green-100 text-green-800';
-      case 'en_cours': return 'bg-blue-100 text-blue-800';
-      case 'a_livrer': return 'bg-yellow-100 text-yellow-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
 
-  const getStatutLabel = (statut: string) => {
-    switch (statut) {
-      case 'livree': return 'Livrée';
-      case 'en_cours': return 'En cours';
-      case 'a_livrer': return 'À livrer';
-      default: return statut;
-    }
-  };
 
   if (loading) return <div className="text-center text-gray-600">Chargement...</div>;
   if (error) return <div className="text-center text-red-600">{error}</div>;
@@ -238,20 +226,34 @@ const Livraisons: React.FC = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
-              <select
-                value={formData.statut}
-                onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-                  setFormData({ ...formData, statut: e.target.value as Livraison['statut'] })
-                }
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="a_livrer">À livrer</option>
-                <option value="en_cours">En cours</option>
-                <option value="livree">Livrée</option>
-              </select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
+                <select
+                  name="statut"
+                  value={formData.statut}
+                  onChange={(e) => setFormData({...formData, statut: e.target.value as 'a_livrer' | 'en_cours' | 'livree'})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="a_livrer">À livrer</option>
+                  <option value="en_cours">En cours</option>
+                  <option value="livree">Livrée</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Niveau</label>
+                <select
+                  name="niveau"
+                  value={formData.niveau}
+                  onChange={(e) => setFormData({...formData, niveau: e.target.value as 'en_transit' | 'en_douane' | 'livree'})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="en_transit">En transit</option>
+                  <option value="en_douane">En douane</option>
+                  <option value="livree">Livrée</option>
+                </select>
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Numéro de bon de livraison</label>
@@ -280,7 +282,7 @@ const Livraisons: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => { setShowForm(false); setEditingLivraison(null); setFormData({ numero_commande: '', produit: '', quantite: '', date_livraison: '', statut: 'a_livrer', bon_livraison_numero: '', livreur: '' }); }}
+                onClick={() => { setShowForm(false); setEditingLivraison(null); setFormData({ numero_commande: '', produit: '', quantite: '', date_livraison: '', statut: 'a_livrer', niveau: 'en_transit', bon_livraison_numero: '', livreur: '' }); }}
                 className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors"
               >
                 Annuler
@@ -308,10 +310,32 @@ const Livraisons: React.FC = () => {
               {livraisons.map((livraison) => (
                 <tr key={livraison.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{livraison.numero_commande}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{produits.find(p => p.id === livraison.produit)?.nom || 'Produit inconnu'}</div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">{livraison.numero_commande}</h3>
+                        <p className="text-sm text-gray-600">{produits.find(p => p.id === livraison.produit)?.nom || 'Produit inconnu'}</p>
+                      </div>
+                      <div className="flex flex-col items-end space-y-2">
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          livraison.statut === 'livree' ? 'bg-green-100 text-green-800' :
+                          livraison.statut === 'en_cours' ? 'bg-blue-100 text-blue-800' :
+                          'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {livraison.statut === 'livree' ? 'Livrée' :
+                           livraison.statut === 'en_cours' ? 'En cours' :
+                           'À livrer'}
+                        </span>
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          livraison.niveau === 'livree' ? 'bg-green-100 text-green-800' :
+                          livraison.niveau === 'en_douane' ? 'bg-orange-100 text-orange-800' :
+                          'bg-blue-100 text-blue-800'
+                        }`}>
+                          {livraison.niveau === 'livree' ? 'Livrée' :
+                           livraison.niveau === 'en_douane' ? 'En douane' :
+                           'En transit'}
+                        </span>
+                      </div>
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">{livraison.quantite}</div>
@@ -320,7 +344,7 @@ const Livraisons: React.FC = () => {
                     <div className="text-sm text-gray-900">{new Date(livraison.date_livraison).toLocaleDateString('fr-FR')}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center space-x-1 px-2 py-1 text-xs font-semibold rounded-full ${getStatutColor(livraison.statut)}`}>{getStatutLabel(livraison.statut)}</span>
+                    <div className="text-sm text-gray-900">{livraison.livreur || 'N/A'}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button className="text-blue-600 hover:text-blue-900 mr-3" onClick={() => handleEdit(livraison)}>Modifier</button>
