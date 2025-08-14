@@ -249,7 +249,7 @@ const ImportTransit: React.FC = () => {
     date_passage: string;
     description: string;
     statut: 'en_cours' | 'termine' | 'retarde';
-    notes: string;
+    notes: string; 
   }) => {
     if (!token || !selectedImport) return;
     
