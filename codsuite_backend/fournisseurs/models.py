@@ -1,6 +1,27 @@
 from django.db import models
 from django.conf import settings
 
+
+class Tenant(models.Model):
+    name = models.CharField(max_length=150, unique=True)
+    slug = models.SlugField(max_length=150, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class UserProfile(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='users')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.username} @ {self.tenant.name}"
+
 class Saison(models.Model):
     nom = models.CharField(max_length=50, unique=True)
 
@@ -12,8 +33,7 @@ class Saison(models.Model):
         return self.nom
 
 class Fournisseur(models.Model):
-    #user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="fournisseurs")
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="fournisseurs", null=True, blank=True)
     nom = models.CharField(max_length=255)
     email = models.EmailField(blank=True, null=True)
     telephone = models.CharField(max_length=20, blank=True, null=True)
@@ -31,7 +51,7 @@ class Fournisseur(models.Model):
         return self.nom
 
 class Echeance(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="echeances", null=True, blank=True)
     titre = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
     date_echeance = models.DateField()
@@ -53,7 +73,7 @@ class Echeance(models.Model):
         return f"{self.titre} - {self.date_echeance}"
 
 class Produit(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="produits", null=True, blank=True)
     nom = models.CharField(max_length=255)
     categorie = models.CharField(max_length=100)
     fournisseur = models.ForeignKey(Fournisseur, on_delete=models.CASCADE)
@@ -77,7 +97,7 @@ class Produit(models.Model):
         return self.nom
 
 class BonCommande(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="bons_commande", null=True, blank=True)
     numero = models.CharField(max_length=50, unique=True)
     produit = models.ForeignKey(Produit, on_delete=models.CASCADE)
     fournisseur = models.ForeignKey(Fournisseur, on_delete=models.CASCADE)
@@ -101,7 +121,7 @@ class BonCommande(models.Model):
         return f"{self.numero} - {self.produit.nom}"
 
 class Livraison(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="livraisons", null=True, blank=True)
     numero_commande = models.CharField(max_length=50)
     produit = models.ForeignKey(Produit, on_delete=models.CASCADE)
     quantite = models.IntegerField()
@@ -128,7 +148,7 @@ class Livraison(models.Model):
         return f"{self.numero_commande} - {self.produit.nom}"
 
 class CommandeAchat(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="commandes_achat", null=True, blank=True)
     numero = models.CharField(max_length=50, unique=True)
     produit = models.ForeignKey(Produit, on_delete=models.CASCADE)
     fournisseur = models.ForeignKey(Fournisseur, on_delete=models.CASCADE)
@@ -153,7 +173,7 @@ class CommandeAchat(models.Model):
         return f"{self.numero} - {self.produit.nom}"
 
 class ImportTransit(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="imports_transit", null=True, blank=True)
     numero_commande = models.CharField(max_length=50, unique=True)
     produit = models.ForeignKey(Produit, on_delete=models.CASCADE)
     fournisseur = models.ForeignKey(Fournisseur, on_delete=models.CASCADE)

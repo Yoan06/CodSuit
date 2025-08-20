@@ -1,6 +1,6 @@
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
-from .models import Fournisseur, Echeance, Produit, BonCommande, Livraison, CommandeAchat, ImportTransit, EtapeTransit, Saison, HistoriqueLieu
+from .models import Tenant, UserProfile, Fournisseur, Echeance, Produit, BonCommande, Livraison, CommandeAchat, ImportTransit, EtapeTransit, Saison, HistoriqueLieu
 from .serializers import (
     FournisseurSerializer, EcheanceSerializer, ProduitSerializer, 
     BonCommandeSerializer, LivraisonSerializer, CommandeAchatSerializer, 
@@ -13,10 +13,12 @@ class FournisseurViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Fournisseur.objects.filter(user=self.request.user)
+        tenant = getattr(getattr(self.request.user, 'profile', None), 'tenant', None)
+        return Fournisseur.objects.filter(tenant=tenant)
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        tenant = getattr(getattr(self.request.user, 'profile', None), 'tenant', None)
+        serializer.save(tenant=tenant)
 
 class EcheanceViewSet(viewsets.ModelViewSet):
     queryset = Echeance.objects.none()
@@ -24,10 +26,12 @@ class EcheanceViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Echeance.objects.filter(user=self.request.user)
+        tenant = getattr(getattr(self.request.user, 'profile', None), 'tenant', None)
+        return Echeance.objects.filter(tenant=tenant)
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        tenant = getattr(getattr(self.request.user, 'profile', None), 'tenant', None)
+        serializer.save(tenant=tenant)
 
 class ProduitViewSet(viewsets.ModelViewSet):
     queryset = Produit.objects.none()
@@ -35,10 +39,12 @@ class ProduitViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Produit.objects.filter(user=self.request.user)
+        tenant = getattr(getattr(self.request.user, 'profile', None), 'tenant', None)
+        return Produit.objects.filter(tenant=tenant)
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        tenant = getattr(getattr(self.request.user, 'profile', None), 'tenant', None)
+        serializer.save(tenant=tenant)
 
 class BonCommandeViewSet(viewsets.ModelViewSet):
     queryset = BonCommande.objects.none()
@@ -46,10 +52,12 @@ class BonCommandeViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return BonCommande.objects.filter(user=self.request.user)
+        tenant = getattr(getattr(self.request.user, 'profile', None), 'tenant', None)
+        return BonCommande.objects.filter(tenant=tenant)
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        tenant = getattr(getattr(self.request.user, 'profile', None), 'tenant', None)
+        serializer.save(tenant=tenant)
 
 class LivraisonViewSet(viewsets.ModelViewSet):
     queryset = Livraison.objects.none()
@@ -57,10 +65,12 @@ class LivraisonViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Livraison.objects.filter(user=self.request.user)
+        tenant = getattr(getattr(self.request.user, 'profile', None), 'tenant', None)
+        return Livraison.objects.filter(tenant=tenant)
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        tenant = getattr(getattr(self.request.user, 'profile', None), 'tenant', None)
+        serializer.save(tenant=tenant)
 
 class CommandeAchatViewSet(viewsets.ModelViewSet):
     queryset = CommandeAchat.objects.none()
@@ -68,10 +78,12 @@ class CommandeAchatViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return CommandeAchat.objects.filter(user=self.request.user)
+        tenant = getattr(getattr(self.request.user, 'profile', None), 'tenant', None)
+        return CommandeAchat.objects.filter(tenant=tenant)
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        tenant = getattr(getattr(self.request.user, 'profile', None), 'tenant', None)
+        serializer.save(tenant=tenant)
 
 class ImportTransitViewSet(viewsets.ModelViewSet):
     queryset = ImportTransit.objects.none()
@@ -79,10 +91,12 @@ class ImportTransitViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return ImportTransit.objects.filter(user=self.request.user)
+        tenant = getattr(getattr(self.request.user, 'profile', None), 'tenant', None)
+        return ImportTransit.objects.filter(tenant=tenant)
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        tenant = getattr(getattr(self.request.user, 'profile', None), 'tenant', None)
+        serializer.save(tenant=tenant)
 
 class EtapeTransitViewSet(viewsets.ModelViewSet):
     queryset = EtapeTransit.objects.none()
@@ -90,7 +104,8 @@ class EtapeTransitViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return EtapeTransit.objects.filter(import_transit__user=self.request.user)
+        tenant = getattr(getattr(self.request.user, 'profile', None), 'tenant', None)
+        return EtapeTransit.objects.filter(import_transit__tenant=tenant)
 
 class SaisonViewSet(viewsets.ModelViewSet):
     queryset = Saison.objects.all()
@@ -102,7 +117,8 @@ class HistoriqueLieuViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return HistoriqueLieu.objects.filter(import_transit__user=self.request.user)
+        tenant = getattr(getattr(self.request.user, 'profile', None), 'tenant', None)
+        return HistoriqueLieu.objects.filter(import_transit__tenant=tenant)
 
     def perform_create(self, serializer):
         serializer.save()
