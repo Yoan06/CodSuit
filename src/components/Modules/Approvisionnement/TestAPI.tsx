@@ -16,7 +16,7 @@ const TestAPI: React.FC = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          username: 'yoan',
+          username: 'test',
           password: 'test12345'
         })
       });
