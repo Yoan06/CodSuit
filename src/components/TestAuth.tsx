@@ -6,7 +6,7 @@ const TestAuth: React.FC = () => {
 
   return (
     <div className="p-6 bg-white rounded-lg shadow-sm border border-gray-200">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Test d'Authentification</h3>
+      <h3 className="text-lg font-semibold text-gray-900 mb-4">Test Authentification</h3>
       
       <div className="space-y-3">
         <div className="flex items-center space-x-2">
